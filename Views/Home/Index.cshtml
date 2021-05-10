@@ -1,0 +1,255 @@
+﻿
+@{
+    ViewData["Title"] = "Ana Sayfa";
+    Layout = "/Pages/Shared/_Layout.cshtml";
+}
+
+<h1 class="text-center">Hoş Geldiniz</h1>
+
+<div class="row">
+    <div class="col-sm-6">
+        <table class="table table-responsive table-borderless table-striped">
+            <tbody id="tbodyButtons"></tbody>
+        </table>
+    </div>
+    <div class="col-sm-6">
+        <div class="row">
+            <form id="form">
+                <div class="form-inline">
+                    <label>Para Miktarı:&emsp;</label>
+                    <input class="form-control" type="number" id="cash" />
+                </div>
+                <div class="form-inline">
+                    <label>Kalan Para Miktarı:&emsp;</label>
+                    <span id="remainder"></span>
+                </div>
+            </form>
+        </div>
+        <hr />
+        <div class="row">
+            <table class="table table-responsive table-borderless table-striped">
+                <thead>
+                    <tr>
+                        <th width='10%'>Miktar</th>
+                        <th width='30%'>Adı</th>
+                        <th width='30%'>Fiyatı</th>
+                        <th width='30%'>Kampanya Fiyatı</th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyContent"></tbody>
+            </table>
+            <button class="btn btn-success" id="submit" disabled>Alış-Verişi Tamamla</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="mdlBill" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Fatura Bilgileri</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">X</button>
+            </div>
+            <div class="modal-body">
+                <table class="table table-striped table-borderless">
+                    <thead>
+                        <tr>
+                            <th>Miktar</th>
+                            <th>Ürün</th>
+                            <th>Fiyat</th>
+                            <th>Kampanyalı Fiyat</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyBill"></tbody>
+                </table>
+                <hr />
+                <table class="table table-borderless" style="width:400px">
+                    <tr>
+                        <td>Toplam Fiyat</td>
+                        <td><span id="spTotalPrice"></span></td>
+                    </tr>
+                    <tr>
+                        <td>Ödenen Para Miktarı</td>
+                        <td><span id="spGivenMoney"></span></td>
+                    </tr>
+                    <tr>
+                        <td>Kalan Tutar</td>
+                        <td><span id="spRemainder"></span></td>
+                    </tr>
+                    <tr>
+                        <td class="text-center" colspan="2"><span id="spMessage"></span></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+
+            var products = {
+                id: 0,
+                name: "",
+                price: 0
+            };
+
+            var selectedProducts = [];
+
+            var selectedProductId = 0;
+
+            $.ajax({
+                type: 'GET',
+                url: "/Home/Products",
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json; charset=utf8',
+                },
+                dataType: "json",
+                success: function (result) {
+                    var count = 0;
+                    var content = "<tr>";
+                    for (var i = 0; i < result.length; i++) {
+
+                        if (count != 3) {
+                            content += "<td width=33%><button class='btn btn-primary btn-block btnProduct' productid='" + result[i].id + "'>" + result[i].name + "</button></td>";
+                            count++;
+                        }
+                        else {
+                            content += "</tr><tr><td width=33%><button class='btn btn-primary btn-block btnProduct' productid='" + result[i].id + "'>" + result[i].name + "</button></td>";
+                            count = 1;
+                        }
+                    }
+                    content += "</tr>";
+                    $("#tbodyButtons").html(content);
+                    products = result;
+                },
+                error: function () { },
+                complete: function () {
+                }
+            });
+
+            $(document).on("click", ".btnProduct", function () {
+                if ($("#cash").val() != "") {
+
+                    $("#cash").attr("disabled", true);
+                    $("#submit").removeAttr("disabled");
+
+                    selectedProduct = {
+                        amount: 0,
+                        productId: 0
+                    };
+
+                    value = $(this).attr('productid');
+
+                    selectedProductId = parseInt(value);
+
+                    for (var i = 0; i < products.length; i++) {
+                        if (products[i].id == selectedProductId) {
+                            selectedProduct.productId = products[i].id;
+                            selectedProduct.amount++;
+                            break;
+                        }
+                    }
+
+                    var check = true;
+
+                    for (var i = 0; i < selectedProducts.length; i++) {
+                        if (selectedProducts[i].productId == selectedProduct.productId) {
+                            selectedProducts[i].amount++;
+                            check = false;
+                        }
+                    }
+
+
+                    if (check)
+                        selectedProducts.push(selectedProduct);
+
+
+                    $.ajax({
+                        type: 'POST',
+                        url: "/Home/Calculate?givenMoney=" + $("#cash").val(),
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json; charset=utf8',
+                        },
+                        dataType: "json",
+                        data: JSON.stringify(selectedProducts),
+                        success: function (result) {
+
+                            if (!result.status) {
+                                alert(result.message);
+                                for (var i = 0; i < selectedProducts.length; i++) {
+                                    if (selectedProducts[i].productId == selectedProductId) {
+                                        if (selectedProducts[i].amount == 1) {
+                                            selectedProducts.splice($.inArray(selectedProductId, selectedProducts), 1);
+                                        }
+                                        else selectedProducts[i].amount--;
+                                    }
+                                }
+                            }
+                            else {
+                                var content = "";
+
+                                for (var i = 0; i < result.receiptProductDtoList.length; i++) {
+                                    content += "<tr><td>" + result.receiptProductDtoList[i].amount + "X</td><td>" + result.receiptProductDtoList[i].product.name + "</td><td>" + result.receiptProductDtoList[i].product.price + "</td><td>" + (result.receiptProductDtoList[i].campaignsPrice == null ? "" : result.receiptProductDtoList[i].campaignsPrice) + "</td></tr>";
+                                }
+
+                                $("#tbodyContent").html(content);
+                                $("#remainder").html("<strong>" + result.remainder + "</strong>");
+                            }
+                        },
+                        error: function () { },
+                        complete: function () {
+                        }
+                    });
+                }
+                else {
+                    alert("Lütfen Para Miktarı Giriniz.");
+                }
+            });
+
+            $("#submit").click(function () {
+                $.ajax({
+                    type: 'POST',
+                    url: "/Home/Selling?givenMoney=" + $("#cash").val(),
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json; charset=utf8',
+                    },
+                    dataType: "json",
+                    data: JSON.stringify(selectedProducts),
+                    success: function (result) {
+                        if (result.status) {
+                            var content = "";
+
+                            for (var i = 0; i < result.receiptProductDtoList.length; i++) {
+                                content += "<tr><td>" + result.receiptProductDtoList[i].amount + "</t><td>" + result.receiptProductDtoList[i].product.name + "</td><td>" + result.receiptProductDtoList[i].product.price + "</td><td>" + (result.receiptProductDtoList[i].campaignsPrice == null ? "" : result.receiptProductDtoList[i].campaignsPrice) + "</td></tr>";
+                            }
+
+                            $("#tbodyBill").html(content);
+
+                            $("#spTotalPrice").text(result.givenMoney - result.remainder);
+                            $("#spGivenMoney").text(result.givenMoney);
+                            $("#spRemainder").text(result.remainder);
+                            $("#spMessage").text(result.message);
+
+                            $("#mdlBill").modal("show");
+                        } else {
+                            alert("Girilen para miktarı toplam tutarın altında olduğu için işlem tamamlanamadı!");
+                        }
+                    },
+                    error: function () { },
+                    complete: function () {
+                    }
+                });
+            });
+
+            $('#mdlBill').on('hidden.bs.modal', function () {
+                window.location.reload();
+            })
+        });
+    </script>
+}
